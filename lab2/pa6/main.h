@@ -8,16 +8,15 @@
 #include "pa2345.h"
 #include "banking.h"
 
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define LOG
 
 typedef struct {
-    local_id current_id;
+    local_id my_id;
     local_id max_id;
-    int from[MAX_PROCESS_ID+1];
-    int to[MAX_PROCESS_ID+1];
+    int pipe_fd_from[MAX_PROCESS_ID + 1];
+    int pipe_fd_to[MAX_PROCESS_ID + 1];
 
-    int done;
+    int done_count;
     int cs;
     int forks[MAX_PROCESS_ID+1];
     int dirty[MAX_PROCESS_ID+1];
@@ -27,10 +26,10 @@ typedef struct {
     int last;
 
     unsigned int balance;
-    int mutexl;
+    int use_mutex;
 
-    FILE* events;
-    FILE* pipes;
+    FILE* events_log_file;
+    FILE* pipes_log_file;
 } io_data;
 
 #endif //PA_MAIN_H

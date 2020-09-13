@@ -24,31 +24,31 @@ int send_message(io_data* io, int dst, int type, timestamp_t time, char* payload
 int send_started_message(io_data* io) {
     char payload[MAX_PAYLOAD_LEN] = {0};
     timestamp_t time = inc_lamport_time();
-    int size = sprintf(payload, log_started_fmt, time, io->current_id, getpid(), getppid(), io->balance);
+    int size = sprintf(payload, log_started_fmt, time, io->my_id, getpid(), getppid(), io->balance);
     fprintf(stdout, "%s", payload);
     fflush(stdout);
-    fprintf(io->events, "%s", payload);
-    fflush(io->events);
+    fprintf(io->events_log_file, "%s", payload);
+    fflush(io->events_log_file);
     return send_message(io, -1, STARTED, time, payload, size);
 }
 
 int send_done_message(io_data* io) {
     char payload[MAX_PAYLOAD_LEN] = {0};
     timestamp_t time = inc_lamport_time();
-    int size = sprintf(payload, log_done_fmt, time, io->current_id, io->balance);
+    int size = sprintf(payload, log_done_fmt, time, io->my_id, io->balance);
     fprintf(stdout, "%s", payload);
     fflush(stdout);
-    fprintf(io->events, "%s", payload);
-    fflush(io->events);
+    fprintf(io->events_log_file, "%s", payload);
+    fflush(io->events_log_file);
     return send_message(io, -1, DONE, time, payload, size);
 }
 
 void wait_for_all(io_data* io, int type) {
     int reported[MAX_PROCESS_ID+1] = {0};
-    reported[io->current_id] = 2;
+    reported[io->my_id] = 2;
 
     int reported_count = 1;
-    if(io->current_id != PARENT_ID)
+    if(io->my_id != PARENT_ID)
         reported_count ++;
     while (reported_count <= io->max_id) {
         for(int i = 1; i <= io->max_id; i++) {
@@ -85,15 +85,15 @@ void send_broadcast_and_wait_for_response(io_data* io, int type) {
     wait_for_all(io, type);
 
     if(type == STARTED) {
-        fprintf(stdout, log_received_all_started_fmt, get_lamport_time(), io->current_id);
+        fprintf(stdout, log_received_all_started_fmt, get_lamport_time(), io->my_id);
         fflush(stdout);
-        fprintf(io->events, log_received_all_started_fmt, get_lamport_time(), io->current_id);
-        fflush(io->events);
+        fprintf(io->events_log_file, log_received_all_started_fmt, get_lamport_time(), io->my_id);
+        fflush(io->events_log_file);
     } else {
-        fprintf(stdout, log_received_all_done_fmt, get_lamport_time(), io->current_id);
+        fprintf(stdout, log_received_all_done_fmt, get_lamport_time(), io->my_id);
         fflush(stdout);
-        fprintf(io->events, log_received_all_done_fmt, get_lamport_time(), io->current_id);
-        fflush(io->events);
+        fprintf(io->events_log_file, log_received_all_done_fmt, get_lamport_time(), io->my_id);
+        fflush(io->events_log_file);
     }
 }
 
@@ -103,7 +103,7 @@ void handle_message(io_data* io) {
     if(result != 0) return;
 
     if(m.s_header.s_type == DONE) {
-        io->done++;
+        io->done_count++;
     } else if(m.s_header.s_type == CS_REQUEST) {
         io->reqf[io->last] = 1;
         if(io->dirty[io->last] == 1) {
@@ -119,11 +119,11 @@ void handle_message(io_data* io) {
     } else if(m.s_header.s_type == CS_REPLY) {
         io->forks[io->last] = 1;
         io->dirty[io->last] = 0;
-//        fprintf(stdout, "process %i: process %i отдал нам вилку\n", io->current_id, io->last);
+//        fprintf(stdout, "process %i: process %i отдал нам вилку\n", io->my_id, io->last);
 //        fflush(stdout);
     }
 
-//    fprintf(stdout, "Process %i queue: ", io->current_id);
+//    fprintf(stdout, "Process %i queue: ", io->my_id);
 //    for(int i = 0; i <= io->max_id; i++) {
 //        fprintf(stdout, "%i ", io->queue[i]);
 //    }
@@ -133,18 +133,18 @@ void handle_message(io_data* io) {
 
 int request_cs(const void * self) {
     io_data* io = (io_data*)self;
-//    fprintf(stdout, "process %i хочет войти в cs\n", io->current_id);
+//    fprintf(stdout, "process %i хочет войти в cs\n", io->my_id);
 //    fflush(stdout);
 
     io->cs = 1;
 
     inc_lamport_time();
     for(int i = 1; i <= io->max_id; i++) {
-        if(i == io->current_id) continue;
+        if(i == io->my_id) continue;
         if(io->forks[i] == 0) {
             send_message(io, i, CS_REQUEST, get_lamport_time(), NULL, 0);
             io->reqf[i] = 0;
-//            fprintf(stdout, "process %i запрашивает вилку у %i\n", io->current_id, i);
+//            fprintf(stdout, "process %i запрашивает вилку у %i\n", io->my_id, i);
 //            fflush(stdout);
         }
     }
@@ -155,7 +155,7 @@ int request_cs(const void * self) {
 
         total = 2;
         for(int i = 1; i <= io->max_id; i++) {
-            if(i == io->current_id) continue;
+            if(i == io->my_id) continue;
             if(io->forks[i] == 1) {
                 if(io->dirty[i] == 1 && io->reqf[i] == 1) continue;
                 total++;
@@ -163,25 +163,25 @@ int request_cs(const void * self) {
         }
     }
 
-//    fprintf(stdout, "process %i entered cs\n", io->current_id);
+//    fprintf(stdout, "process %i entered cs\n", io->my_id);
 //    fflush(stdout);
     return 0;
 }
 
 int release_cs(const void * self) {
     io_data* io = (io_data*)self;
-//    fprintf(stdout, "process %i leave cs\n", io->current_id);
+//    fprintf(stdout, "process %i leave cs\n", io->my_id);
 //    fflush(stdout);
 
     io->cs = 0;
     for(int i = 1; i <= io->max_id; i++) {
-        if(i == io->current_id) continue;
+        if(i == io->my_id) continue;
         io->dirty[i] = 1;
     }
 
     inc_lamport_time();
     for(int i = 1; i <= io->max_id; i++) {
-        if(i == io->current_id) continue;
+        if(i == io->my_id) continue;
         if(io->reqf[i] == 1) {
             io->forks[i] = 0;
             send_message(io, i, CS_REPLY, get_lamport_time(), NULL, 0);

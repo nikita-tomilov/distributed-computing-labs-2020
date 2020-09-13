@@ -12,6 +12,6 @@ timestamp_t inc_lamport_time() {
 }
 
 void update_lamport_time(timestamp_t n) {
-    if(n > lamport_time)
+    if (n > lamport_time)
         lamport_time = n;
 }

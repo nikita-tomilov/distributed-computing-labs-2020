@@ -26,15 +26,15 @@ static const char * const log_done_fmt =
     "%d: process %1d has DONE with balance $%2d\n";
 
 static const char * const log_transfer_out_fmt =
-    "%d: process %1d transferred $%2d to process %1d\n";
+    "%d: process %1d transferred $%2d pipe_fd_to process %1d\n";
 
 static const char * const log_transfer_in_fmt =
-    "%d: process %1d received $%2d from process %1d\n";
+    "%d: process %1d received $%2d pipe_fd_from process %1d\n";
 
 static const char * const log_received_all_done_fmt =
     "%d: process %1d received all DONE messages\n";
 
-/* Iteration enumerated starting from 1, i.e.
+/* Iteration enumerated starting pipe_fd_from 1, i.e.
  * 1, 2, 3, 4 out of 4.
  * <timestamp> process <local id> ...
  */

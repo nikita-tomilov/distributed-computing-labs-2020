@@ -72,7 +72,7 @@ void transfer(void * parent_data, local_id src, local_id dst, balance_t amount);
 
 //------------------------------------------------------------------------------
 // Functions below are implemented by lector, test implementations are
-// provided to students for testing purposes
+// provided pipe_fd_to students for testing purposes
 //------------------------------------------------------------------------------
 
 /** Perform a number of transfers between various children with ids [1;max_id]
