@@ -61,7 +61,7 @@ int receive_any(void *self, Message *msg) {
     for (int i = 0; i <= io->max_id; i++) {
         if (i == io->my_id) continue;
         if (receive(self, i, msg) == 0) {
-            io->last = i;
+            io->message_from_id = i;
             return 0;
         }
     }

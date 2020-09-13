@@ -65,13 +65,12 @@ void create_io_structures(io_data *io, int p, FILE *events_file, FILE *pipes_fil
 
         io[i].use_mutex = use_mutex;
         io[i].done_count = 2;
-        io[i].request_time = 100000;
-        io[i].cs = 0;
+        io[i].requested_cs = 0;
 
         for (int j = 0; j <= p; j++) {
-            io[i].forks[j] = (j >= i) ? 1 : 0;
-            io[i].dirty[j] = io[i].forks[j];
-            io[i].reqf[j] = 1 - io[i].forks[j];
+            io[i].fork_to_process_i_is_mine[j] = (j >= i) ? 1 : 0;
+            io[i].fork_to_process_i_is_dirty[j] = io[i].fork_to_process_i_is_mine[j];
+            io[i].request_marker[j] = 1 - io[i].fork_to_process_i_is_mine[j];
             if (i == j) {
                 io[i].pipe_fd_to[i] = -1;
                 io[i].pipe_fd_from[i] = -1;
@@ -132,7 +131,7 @@ int main(int argc, char *argv[]) {
     io_data io[p + 1];
     create_io_structures(io, p, events, pipes, use_mutex);
 
-#ifdef LOG
+#ifdef SHOULD_LOG
     for (int i = 0; i < p; i++) {
         log_pipes(&io[i]);
     }

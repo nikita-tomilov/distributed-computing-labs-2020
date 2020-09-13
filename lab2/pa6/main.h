@@ -8,7 +8,7 @@
 #include "pa2345.h"
 #include "banking.h"
 
-#define LOG
+//#define SHOULD_LOG
 
 typedef struct {
     local_id my_id;
@@ -17,13 +17,12 @@ typedef struct {
     int pipe_fd_to[MAX_PROCESS_ID + 1];
 
     int done_count;
-    int cs;
-    int forks[MAX_PROCESS_ID+1];
-    int dirty[MAX_PROCESS_ID+1];
-    int reqf[MAX_PROCESS_ID+1];
-    int request_time;
+    int requested_cs;
+    int fork_to_process_i_is_mine[MAX_PROCESS_ID + 1];
+    int fork_to_process_i_is_dirty[MAX_PROCESS_ID + 1];
+    int request_marker[MAX_PROCESS_ID + 1];
 
-    int last;
+    int message_from_id;
 
     unsigned int balance;
     int use_mutex;
