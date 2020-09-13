@@ -4,3 +4,4 @@ lab1pa3
 lab1pa4
 *.log
 obj/
+cmake-build-debug/
