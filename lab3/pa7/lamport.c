@@ -16,11 +16,9 @@ void assign_lamport_time(const timestamp_t* source, timestamp_t* dest) {
     }
 }
 
-timestamp_t *inc_lamport_time() {
-    for (int i = 0; i < MAX_PROCESS_ID; i++) {
-        lamport_time[i]++;
-    }
-    return lamport_time;
+timestamp_t *inc_lamport_time(int my_id) {
+    lamport_time[my_id]++;
+    return get_lamport_time();
 }
 
 void update_lamport_time(const timestamp_t *time_msg) {
@@ -37,5 +35,5 @@ char *get_lamport_time_string(int n) {
 }
 
 timestamp_t get_my_lamport_time(int my_id) {
-    return lamport_time[my_id - 1];
+    return lamport_time[my_id];
 }

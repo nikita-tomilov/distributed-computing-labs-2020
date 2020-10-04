@@ -60,7 +60,7 @@ int receive(void *self, local_id from, Message *msg) {
     msg->s_header = h;
 
     update_lamport_time(msg->s_header.s_local_timevector);
-    inc_lamport_time();
+    inc_lamport_time(io->current_id);
     printf("Time [%s]: Process %i received msg from %i (type %s, size %i)\n", get_lamport_time_string(io->max_id),
            io->current_id, from, type_from_int(h.s_type), h.s_payload_len);
     if (h.s_payload_len == 0) {

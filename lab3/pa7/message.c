@@ -22,7 +22,7 @@ int send_message(io_data* io, int dst, int type, timestamp_t* time_vector, char*
 
 int send_started_message(io_data* io) {
     char payload[MAX_PAYLOAD_LEN] = {0};
-    timestamp_t* time = inc_lamport_time();
+    timestamp_t* time = inc_lamport_time(io->current_id);
     int size = sprintf(payload, log_started_fmt, get_my_lamport_time(io->current_id), io->current_id, getpid(), getppid(), io->balance);
     fprintf(stdout, "%s", payload);
     fflush(stdout);
@@ -33,7 +33,7 @@ int send_started_message(io_data* io) {
 
 int send_done_message(io_data* io) {
     char payload[MAX_PAYLOAD_LEN] = {0};
-    timestamp_t* time = inc_lamport_time();
+    timestamp_t* time = inc_lamport_time(io->current_id);
     int size = sprintf(payload, log_done_fmt, get_my_lamport_time(io->current_id), io->current_id, io->balance);
     fprintf(stdout, "%s", payload);
     fflush(stdout);
@@ -99,15 +99,15 @@ int init_transfer(io_data* io, local_id src, local_id dst, int amount) {
             .s_dst = dst,
             .s_amount = amount
     };
-    timestamp_t* time = inc_lamport_time();
+    timestamp_t* time = inc_lamport_time(io->current_id);
     int size = sizeof(TransferOrder);
     return send_message(io, src, TRANSFER, time, (char*)&payload, size);
 }
 
 int send_ack(io_data* io, local_id dst) {
-    return send_message(io, dst, ACK, inc_lamport_time(), NULL, 0);
+    return send_message(io, dst, ACK, inc_lamport_time(io->current_id), NULL, 0);
 }
 
 int send_broadcast_stop(io_data* io) {
-    return send_message(io, -1, STOP, inc_lamport_time(), NULL, 0);
+    return send_message(io, -1, STOP, inc_lamport_time(io->current_id), NULL, 0);
 }

@@ -64,7 +64,7 @@ int child_loop(io_data io) {
 
                 io.balance -= data->s_amount;
 
-                assign_lamport_time(inc_lamport_time(), m.s_header.s_local_timevector);
+                assign_lamport_time(inc_lamport_time(io.current_id), m.s_header.s_local_timevector);
                 send(&io, data->s_dst, &m);
             } else if (data->s_dst == io.current_id) {
                 fprintf(stdout, log_transfer_in_fmt, get_my_lamport_time(io.current_id), io.current_id, data->s_amount, data->s_dst);
