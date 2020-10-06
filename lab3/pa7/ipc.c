@@ -18,6 +18,14 @@ char *type_from_int(int type) {
             return "STOP";
         case ACK:
             return "ACK";
+        case SNAPSHOT_VTIME:
+            return "SNAPSHOT_VTIME";
+        case SNAPSHOT_ACK:
+            return "SNAPSHOT_ACK";
+        case EMPTY:
+            return "EMPTY";
+        case BALANCE_STATE:
+            return "BALANCE_STATE";
         default:
             return "UNKNOWN";
     }
@@ -49,6 +57,12 @@ int send_multicast(void *self, const Message *msg) {
     return 0;
 }
 
+void advance_lamport_time_if_needed(io_data *io, MessageType mt) {
+    if ((mt != SNAPSHOT_VTIME) && (mt != SNAPSHOT_ACK)) {
+        inc_lamport_time(io->current_id);
+    }
+}
+
 int receive(void *self, local_id from, Message *msg) {
     io_data *io = (io_data *) self;
     MessageHeader h;
@@ -60,9 +74,9 @@ int receive(void *self, local_id from, Message *msg) {
     msg->s_header = h;
 
     update_lamport_time(msg->s_header.s_local_timevector);
-    inc_lamport_time(io->current_id);
-    printf("Time [%s]: Process %i received msg from %i (type %s, size %i)\n", get_lamport_time_string(io->max_id),
-           io->current_id, from, type_from_int(h.s_type), h.s_payload_len);
+    advance_lamport_time_if_needed(io, msg->s_header.s_type);
+    //printf("Time [%s]: Process %i received msg from %i (type %s, size %i)\n", get_lamport_time_string(io->max_id),
+    //       io->current_id, from, type_from_int(h.s_type), h.s_payload_len);
     if (h.s_payload_len == 0) {
         return 0;
     }

@@ -42,6 +42,27 @@ int send_done_message(io_data* io) {
     return send_message(io, -1, DONE, time, payload, size);
 }
 
+int send_snapshot_vtime(io_data* io) {
+    timestamp_t t[MAX_PROCESS_ID];
+    timestamp_t* orig = get_lamport_time();
+    for (int i = 0; i < MAX_PROCESS_ID; i++) {
+        t[i] = orig[i];
+    }
+    t[io->current_id]++;
+    return send_message(io, -1, SNAPSHOT_VTIME, t, NULL, 0);
+}
+
+int send_snapshot_ack(io_data* io, local_id dest) {
+    return send_message(io, dest, SNAPSHOT_ACK, get_lamport_time(), NULL, 0);
+}
+
+int send_balance_state(io_data* io, local_id dest) {
+    char buf[128] = {0};
+    sprintf(buf, "%u", io->balance);
+    unsigned long len = strlen(buf);
+    return send_message(io, dest, BALANCE_STATE, get_lamport_time(), buf, (int)len);
+}
+
 void wait_for_all(io_data* io, int type) {
     int reported[MAX_PROCESS_ID+1] = {0};
     reported[io->current_id] = 2;
@@ -55,7 +76,7 @@ void wait_for_all(io_data* io, int type) {
 
             Message m;
             int result = receive(io, i, &m);
-            if(result == 0) {
+            if ((result == 0) && (m.s_header.s_type == type)) {
                 reported[i] = 1;
                 reported_count++;
             }
@@ -64,23 +85,30 @@ void wait_for_all(io_data* io, int type) {
     }
 }
 
-void send_broadcast_and_wait_for_response(io_data* io, int type) {
+void send_broadcast_and_wait_for_response(io_data* io, int msg_type, int expected_reply_type) {
     int result;
-    if(type == STARTED) {
-        result = send_started_message(io);
-    } else if(type == DONE) {
-        result = send_done_message(io);
-    } else {
-        return;
+    switch (msg_type) {
+        case STARTED:
+            result = send_started_message(io);
+            break;
+        case DONE:
+            result = send_done_message(io);
+            break;
+        case SNAPSHOT_VTIME:
+            result = send_snapshot_vtime(io);
+            break;
+        default:
+            printf("UNKNOWN TYPE %d FOR BROADCASTING\n", msg_type);
+            return;
     }
 
     if(result != 0) {
         return;
     }
 
-    wait_for_all(io, type);
+    wait_for_all(io, expected_reply_type);
 
-    if(type == STARTED) {
+    if(msg_type == STARTED) {
         fprintf(stdout, log_received_all_started_fmt, get_my_lamport_time(io->current_id), io->current_id);
         fflush(stdout);
         fprintf(io->events, log_received_all_started_fmt, get_my_lamport_time(io->current_id), io->current_id);
