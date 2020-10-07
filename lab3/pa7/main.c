@@ -7,6 +7,7 @@
 #include "lamport.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <inttypes.h>
 #include <fcntl.h>
@@ -104,7 +105,10 @@ int child_loop(io_data io) {
                 if (handle_done_message(&io, &done_count)) should_stop = 1;
                 break;
             case SNAPSHOT_VTIME:
-                next_balance_state_ts = m.s_header.s_local_timevector[0];
+                m.s_payload[m.s_header.s_payload_len] = 0;
+                //printf("ACHIEVED on %d: '%s'\n", io.current_id, m.s_payload);
+                char *eptr;
+                next_balance_state_ts = strtoul(m.s_payload, &eptr, 10);
                 send_snapshot_ack(&io, 0);
                 break;
             case TRANSFER:

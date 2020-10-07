@@ -42,14 +42,15 @@ int send_done_message(io_data* io) {
     return send_message(io, -1, DONE, time, payload, size);
 }
 
+int send_empty(io_data* io) {
+    return send_message(io, -1, EMPTY, inc_lamport_time(0), NULL, 0);
+}
+
 int send_snapshot_vtime(io_data* io) {
-    timestamp_t t[MAX_PROCESS_ID];
-    timestamp_t* orig = get_lamport_time();
-    for (int i = 0; i < MAX_PROCESS_ID; i++) {
-        t[i] = orig[i];
-    }
-    t[io->current_id]++;
-    return send_message(io, -1, SNAPSHOT_VTIME, t, NULL, 0);
+    char buf[128] = {0};
+    sprintf(buf, "%u", get_lamport_time()[0] + 1);
+    unsigned long len = strlen(buf);
+    return send_message(io, -1, SNAPSHOT_VTIME, get_lamport_time(), buf, (int)len);
 }
 
 int send_snapshot_ack(io_data* io, local_id dest) {
@@ -60,7 +61,7 @@ int send_balance_state(io_data* io, local_id dest) {
     char buf[128] = {0};
     sprintf(buf, "%u", io->balance);
     unsigned long len = strlen(buf);
-    return send_message(io, dest, BALANCE_STATE, get_lamport_time(), buf, (int)len);
+    return send_message(io, dest, BALANCE_STATE, inc_lamport_time(io->current_id), buf, (int)len);
 }
 
 void wait_for_all(io_data* io, int type) {
@@ -85,8 +86,8 @@ void wait_for_all(io_data* io, int type) {
     }
 }
 
-void send_broadcast_and_wait_for_response(io_data* io, int msg_type, int expected_reply_type) {
-    int result;
+int send_broadcast(io_data* io, int msg_type) {
+    int result = -1;
     switch (msg_type) {
         case STARTED:
             result = send_started_message(io);
@@ -97,10 +98,17 @@ void send_broadcast_and_wait_for_response(io_data* io, int msg_type, int expecte
         case SNAPSHOT_VTIME:
             result = send_snapshot_vtime(io);
             break;
+        case EMPTY:
+            result = send_empty(io);
+            break;
         default:
             printf("UNKNOWN TYPE %d FOR BROADCASTING\n", msg_type);
-            return;
     }
+    return result;
+}
+
+void send_broadcast_and_wait_for_response(io_data* io, int msg_type, int expected_reply_type) {
+    int result = send_broadcast(io, msg_type);
 
     if(result != 0) {
         return;

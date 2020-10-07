@@ -56,8 +56,8 @@ void total_sum_snapshot(void *parent_data) {
     io_data *io = (io_data *) parent_data;
     //around page 82
     send_broadcast_and_wait_for_response(io, SNAPSHOT_VTIME, SNAPSHOT_ACK);
-    inc_lamport_time(0);
     uint total_balance = 0;
+    send_broadcast(io, EMPTY);
     wait_for_all_balance_states(io, &total_balance);
     printf("[%s]: %u %d\n", get_lamport_time_string(io->max_id), total_balance, 0);
 }
