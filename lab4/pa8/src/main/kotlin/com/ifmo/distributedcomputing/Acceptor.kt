@@ -56,8 +56,7 @@ class Acceptor(
           clientSocket,
           id.incrementAndGet())
       connection.onReceive {
-        logger.info { "Received: $it" }
-        connection.send("ok boomer")
+        logger.warn { "Received: $it" }
       }
       connection.onClose {
         logger.info { "Connection closed" }

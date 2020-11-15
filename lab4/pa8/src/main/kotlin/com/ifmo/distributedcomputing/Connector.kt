@@ -1,5 +1,8 @@
 package com.ifmo.distributedcomputing
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import mu.KLogging
 import java.io.BufferedReader
 import java.io.BufferedWriter
@@ -25,6 +28,8 @@ class Connector(
   private lateinit var toServer: BufferedWriter
 
   private val wasConnected = AtomicBoolean(false)
+
+  private val mapper = ObjectMapper().registerKotlinModule()
 
   fun connect() {
     while (!wasConnected.get()) {
@@ -53,7 +58,7 @@ class Connector(
         Thread.sleep(1000)
       }
     }
-    logger.warn { "Connected to $targetHost:$targetPort" }
+    logger.info { "Connected to $targetHost:$targetPort" }
   }
 
   fun close() {
@@ -62,12 +67,12 @@ class Connector(
     clientSocket.close()
   }
 
-  fun send(s: String) {
-    toServer.write(s + "\n")
+  fun send(m: Message) {
+    toServer.write(mapper.writeValueAsString(m) + "\n")
     toServer.flush()
   }
 
-  fun receiveBlocking(): String = fromServer.readLine()
+  fun receiveBlocking(): Message = mapper.readValue(fromServer.readLine())
 
   companion object : KLogging()
 }

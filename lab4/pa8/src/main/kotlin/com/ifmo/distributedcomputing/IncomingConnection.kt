@@ -1,5 +1,8 @@
 package com.ifmo.distributedcomputing
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import mu.KLogging
 import java.io.BufferedReader
 import java.io.BufferedWriter
@@ -15,14 +18,15 @@ class IncomingConnection(
 
   private val inbound = BufferedReader(InputStreamReader(clientSocket.getInputStream()))
   private val outbound = BufferedWriter(OutputStreamWriter(clientSocket.getOutputStream()))
+  private val mapper = ObjectMapper().registerKotlinModule()
 
   private val isClosed = AtomicBoolean(false)
 
-  private var onReceiveCallback: ((String) -> Unit) = { }
+  private var onReceiveCallback: ((Message) -> Unit) = { }
 
   private var onCloseCallback: (() -> Unit) = {}
 
-  fun onReceive(callback: ((String) -> Unit)) {
+  fun onReceive(callback: ((Message) -> Unit)) {
     this.onReceiveCallback = callback
   }
 
@@ -30,8 +34,8 @@ class IncomingConnection(
     this.onCloseCallback = callback
   }
 
-  fun send(data: String) {
-    outbound.write(data + "\n")
+  fun send(m: Message) {
+    outbound.write(mapper.writeValueAsString(m) + "\n")
     outbound.flush()
   }
 
@@ -43,7 +47,7 @@ class IncomingConnection(
         try {
           val string = inbound.readLine()
           if (string != null) {
-            onReceiveCallback.invoke(string)
+            onReceiveCallback.invoke(mapper.readValue(string))
           } else {
             close()
           }

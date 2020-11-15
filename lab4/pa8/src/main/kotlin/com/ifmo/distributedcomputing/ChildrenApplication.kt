@@ -24,12 +24,13 @@ object ChildrenApplication : KLogging() {
     logger.warn { "Connected to everyone" }
 
     connectors.forEach { connector ->
-      connector.send("test")
-      val s = connector.receiveBlocking()
-      logger.warn { "received back: $s" }
+      connector.send(Message(myId, MessageType.STARTED))
+    }
+    connectors.forEach { connector ->
+      connector.send(Message(myId, MessageType.DONE))
       connector.close()
-      logger.warn { "closed" }
     }
     latch.await()
+    acceptor.stop()
   }
 }
