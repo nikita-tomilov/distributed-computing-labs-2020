@@ -5,3 +5,5 @@ lab1pa4
 *.log
 obj/
 cmake-build-debug/
+target/
+*.iml
