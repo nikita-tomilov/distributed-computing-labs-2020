@@ -1,79 +1,77 @@
 package com.ifmo.distributedcomputing.outbound
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.ifmo.distributedcomputing.dto.Message
+import com.ifmo.distributedcomputing.ipc.EventHandler
+import com.ifmo.distributedcomputing.ipc.SelectorSingleton
 import mu.KLogging
-import java.io.BufferedReader
-import java.io.BufferedWriter
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.lang.Exception
-import java.net.BindException
 import java.net.ConnectException
 import java.net.InetSocketAddress
-import java.net.Socket
+import java.nio.ByteBuffer
+import java.nio.channels.SelectionKey
+import java.nio.channels.SocketChannel
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
 class Connector(
   private val targetHost: String,
   private val targetPort: Int,
+  private val targetProcessId: Int,
   private val localPort: Int
-) {
+) : EventHandler {
 
-  private lateinit var clientSocket: Socket
-
-  private lateinit var fromServer: BufferedReader
-
-  private lateinit var toServer: BufferedWriter
+  private lateinit var clientSocket: SocketChannel
 
   private val wasConnected = AtomicBoolean(false)
 
   private val mapper = ObjectMapper().registerKotlinModule()
 
+  private val writeQueue = ConcurrentLinkedQueue<Message>()
+
   fun connect() {
-    while (!wasConnected.get()) {
-      try {
-        clientSocket = Socket()
-        if (localPort != 0) {
-          clientSocket.bind(InetSocketAddress(localPort))
-        }
-        clientSocket.connect(InetSocketAddress(targetHost, targetPort))
-        wasConnected.set(true)
-        fromServer = BufferedReader(InputStreamReader(clientSocket.getInputStream()))
-        toServer = BufferedWriter(OutputStreamWriter(clientSocket.getOutputStream()))
-      } catch (e: ConnectException) {
-        //do nothing
-        clientSocket.close()
-        logger.warn { "ConnectException" }
-        Thread.sleep(1000)
-      } catch (e: BindException) {
-        //do nothing as well
-        clientSocket.close()
-        logger.warn { "BindException" }
-        Thread.sleep(1000)
-      } catch (e: Exception) {
-        logger.error(e) { "Error when connecting to $targetHost:$targetPort from local port $localPort" }
-        clientSocket.close()
-        Thread.sleep(1000)
+    if (wasConnected.get()) return
+    try {
+      clientSocket = SocketChannel.open()
+      if (localPort != 0) {
+        clientSocket.bind(InetSocketAddress(localPort))
       }
+      clientSocket.connect(InetSocketAddress(targetHost, targetPort))
+      wasConnected.set(true)
+      clientSocket.configureBlocking(false)
+      clientSocket.register(SelectorSingleton.selector, SelectionKey.OP_WRITE)
+    } catch (e: ConnectException) {
+      //do nothing
+      clientSocket.close()
+      throw e
     }
-    logger.info { "Connected to $targetHost:$targetPort" }
+
+    logger.warn { "Connected to $targetHost:$targetPort" }
   }
 
-  fun close() {
-    clientSocket.shutdownOutput()
-    clientSocket.shutdownInput()
-    clientSocket.close()
+  override fun handle(selectionKey: SelectionKey) {
+    val channel = selectionKey.channel() as SocketChannel
+    val my = clientSocket.socket().channel
+    if (channel != my) {
+      return
+    }
+    if (writeQueue.isNotEmpty()) {
+      val m = writeQueue.poll()
+      val json = mapper.writeValueAsString(m)
+      val sc = clientSocket.socket().channel
+      val bb: ByteBuffer = ByteBuffer.wrap(json.toByteArray())
+      sc.write(bb)
+    }
   }
 
   fun send(m: Message) {
-    toServer.write(mapper.writeValueAsString(m) + "\n")
-    toServer.flush()
+    if ((m.to == targetProcessId) || (m.isBroadcast()))
+    writeQueue.add(m)
   }
 
-  fun receiveBlocking(): Message = mapper.readValue(fromServer.readLine())
+  fun close() {
+    clientSocket.close()
+  }
 
   companion object : KLogging()
 }

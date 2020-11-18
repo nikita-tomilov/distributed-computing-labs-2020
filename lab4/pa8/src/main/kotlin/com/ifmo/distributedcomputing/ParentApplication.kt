@@ -1,9 +1,10 @@
 package com.ifmo.distributedcomputing
 
 import com.ifmo.distributedcomputing.inbound.Acceptor
+import com.ifmo.distributedcomputing.ipc.Reactor
+import com.ifmo.distributedcomputing.ipc.ReactorEventType
 import mu.KLogging
 import java.lang.reflect.Field
-import java.util.concurrent.CountDownLatch
 
 object ParentApplication : KLogging() {
 
@@ -11,15 +12,17 @@ object ParentApplication : KLogging() {
     Thread.currentThread().name = "parent"
     logger.info { "Entered Parent" }
     val port = 33000
-    val latch = CountDownLatch(N)
-    val acceptor = Acceptor(port, latch)
-    acceptor.start()
-    spawnChilds(
-        N,
-        port)
-    latch.await()
-    acceptor.stop()
-    logger.warn { "Acceptor stopped" }
+
+    val reactor = Reactor()
+    val acceptor = Acceptor(port, reactor)
+    acceptor.setup()
+    reactor.registerHandler(ReactorEventType.ACCEPT, acceptor)
+    spawnChilds(N, port)
+
+    while (true) {
+      reactor.eventLoop(1000)
+      logger.warn { "reactor loop in parent" }
+    }
   }
 
   private fun spawnChilds(N: Int, port: Int) {

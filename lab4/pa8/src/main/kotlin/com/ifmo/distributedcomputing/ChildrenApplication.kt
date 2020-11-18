@@ -3,8 +3,11 @@ package com.ifmo.distributedcomputing
 import com.ifmo.distributedcomputing.dto.Message
 import com.ifmo.distributedcomputing.dto.MessageType
 import com.ifmo.distributedcomputing.inbound.Acceptor
+import com.ifmo.distributedcomputing.ipc.Reactor
+import com.ifmo.distributedcomputing.ipc.ReactorEventType
 import com.ifmo.distributedcomputing.outbound.Connector
 import mu.KLogging
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 
 object ChildrenApplication : KLogging() {
@@ -13,39 +16,59 @@ object ChildrenApplication : KLogging() {
     Thread.currentThread().name = "child-$myId"
     logger.info { "Entered Child" }
 
-    val latch = CountDownLatch(totalProcesses)
-    val acceptor = Acceptor(
-        parentPort + myId,
-        latch)
-    acceptor.start()
+    val reactor = Reactor()
+    val acceptor = Acceptor(parentPort + myId, reactor)
+    acceptor.setup()
+    reactor.registerHandler(ReactorEventType.ACCEPT, acceptor)
 
-    Thread.sleep((totalProcesses * 100).toLong())
+    val connectors = ConcurrentHashMap<Int, Connector>()
+    val latch = CountDownLatch(1)
 
-    val connectors = (parentPort..(parentPort + totalProcesses)).map {
-      val connector = Connector(
-          "localhost",
-          it,
-          0) //it - 10000 + myId * 100)
-      connector.connect()
-      connector
+    (0..totalProcesses).forEach {
+      val targetProcess = it
+      val targetPort = parentPort + it
+
+      var success = false
+      while (!success) {
+        try {
+          val connector = Connector(
+              "localhost",
+              targetPort,
+              targetProcess,
+              0) //it - 10000 + myId * 100)
+          connector.connect()
+          reactor.registerHandler(ReactorEventType.WRITE, connector)
+          success = true
+          connectors[it] = connector
+        } catch (e: Exception) {
+          reactor.eventLoop(100)
+        }
+      }
     }
 
     logger.warn { "Connected to everyone" }
 
-    connectors.forEach { connector ->
+    connectors.forEach { (idx, connector) ->
+      reactor.eventLoop(100)
       connector.send(
           Message(
               myId,
+              idx,
               MessageType.STARTED))
     }
-    connectors.forEach { connector ->
+    connectors.forEach { (idx, connector) ->
+      reactor.eventLoop(100)
       connector.send(
           Message(
               myId,
+              idx,
               MessageType.DONE))
-      connector.close()
     }
-    latch.await()
-    acceptor.stop()
+
+    while (latch.count > 0) {
+      reactor.eventLoop(1000)
+    }
+
+    logger.warn { "i finished" }
   }
 }

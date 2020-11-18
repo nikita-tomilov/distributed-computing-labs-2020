@@ -1,73 +1,56 @@
 package com.ifmo.distributedcomputing.inbound
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.ifmo.distributedcomputing.dto.Message
+import com.ifmo.distributedcomputing.ipc.EventHandler
+import com.ifmo.distributedcomputing.ipc.Reactor
+import com.ifmo.distributedcomputing.ipc.ReactorEventType
+import com.ifmo.distributedcomputing.ipc.SelectorSingleton
 import mu.KLogging
-import java.net.ServerSocket
-import java.net.SocketException
-import java.net.SocketTimeoutException
-import java.util.concurrent.CopyOnWriteArraySet
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
+import java.net.InetSocketAddress
+import java.nio.ByteBuffer
+import java.nio.channels.SelectionKey
+import java.nio.channels.ServerSocketChannel
+import java.nio.channels.SocketChannel
 
 class Acceptor(
   private val port: Int,
-  private val latch: CountDownLatch
-) {
+  private val reactor: Reactor
+) : EventHandler {
 
-  private lateinit var serverSocket: ServerSocket
+  private lateinit var serverSocket: ServerSocketChannel
 
-  private val started = AtomicBoolean(false)
+  private val mapper = ObjectMapper().registerKotlinModule()
 
-  private val connections = CopyOnWriteArraySet<IncomingConnection>()
+  fun setup() {
+    serverSocket = ServerSocketChannel.open()
+    serverSocket.bind(InetSocketAddress(port))
+    serverSocket.configureBlocking(false)
+    serverSocket.register(SelectorSingleton.selector, SelectionKey.OP_ACCEPT)
+  }
 
-  private val id = AtomicInteger(0)
+  override fun handle(selectionKey: SelectionKey) {
+    val clientSocket = serverSocket.accept()
+    logger.warn { "Accepted client connection from ${clientSocket.remoteAddress}" }
 
-  fun start() {
-    if (started.get()) error("already started")
-    started.set(true)
-    serverSocket = ServerSocket(port)
-    serverSocket.soTimeout = 1000
-    val serverThread = Thread {
-      while (started.get()) {
-        try {
-          serverAcceptLoop()
-        } catch (te: SocketTimeoutException) {
-          //do nothing
-        } catch (e: Exception) {
-          logger.error(e) { "Error in serverThread" }
+    clientSocket.configureBlocking(false);
+    clientSocket.register(SelectorSingleton.selector, SelectionKey.OP_READ)
+
+    reactor.registerHandler(ReactorEventType.READ, object : EventHandler {
+      override fun handle(selectionKey: SelectionKey) {
+        val socketChannel = selectionKey.channel() as SocketChannel
+        val bb: ByteBuffer = ByteBuffer.allocate(1024)
+        socketChannel.read(bb)
+        val bytes = bb.array()
+        if (bytes[0].toInt() != 0) {
+          val json = String(bytes)
+          val msg = mapper.readValue<Message>(json)
+          logger.warn { "Received: $msg" }
         }
       }
-    }
-    serverThread.name = "acceptor"
-    serverThread.isDaemon = true
-    serverThread.start()
-    logger.warn { "Acceptor socket started at port $port" }
-  }
-
-  fun stop() {
-    started.set(false)
-    serverSocket.close()
-  }
-
-  private fun serverAcceptLoop() {
-    try {
-      val clientSocket = serverSocket.accept()
-      val connection = IncomingConnection(
-          clientSocket,
-          id.incrementAndGet())
-      connection.onReceive {
-        logger.warn { "Received: $it" }
-      }
-      connection.onClose {
-        logger.info { "Connection closed" }
-        connections.remove(connection)
-        latch.countDown()
-      }
-      connection.beginListening()
-      connections.add(connection)
-    } catch (se: SocketException) {
-      //do nothing
-    }
+    })
   }
 
   companion object : KLogging()
