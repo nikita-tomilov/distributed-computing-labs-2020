@@ -1,4 +1,4 @@
-package com.ifmo.distributedcomputing
+package com.ifmo.distributedcomputing.dto
 
 data class Message(
   val from: Int,

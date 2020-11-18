@@ -1,4 +1,4 @@
-package com.ifmo.distributedcomputing
+package com.ifmo.distributedcomputing.inbound
 
 import mu.KLogging
 import java.net.ServerSocket

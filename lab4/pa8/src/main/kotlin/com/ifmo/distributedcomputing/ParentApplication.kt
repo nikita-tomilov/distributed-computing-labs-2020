@@ -1,5 +1,6 @@
 package com.ifmo.distributedcomputing
 
+import com.ifmo.distributedcomputing.inbound.Acceptor
 import mu.KLogging
 import java.lang.reflect.Field
 import java.util.concurrent.CountDownLatch

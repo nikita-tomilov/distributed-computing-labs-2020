@@ -1,8 +1,9 @@
-package com.ifmo.distributedcomputing
+package com.ifmo.distributedcomputing.inbound
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.ifmo.distributedcomputing.dto.Message
 import mu.KLogging
 import java.io.BufferedReader
 import java.io.BufferedWriter
