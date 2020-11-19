@@ -1,10 +1,12 @@
 package com.ifmo.distributedcomputing
 
+import com.ifmo.distributedcomputing.dto.MessageType
 import com.ifmo.distributedcomputing.inbound.Acceptor
 import com.ifmo.distributedcomputing.ipc.Reactor
 import com.ifmo.distributedcomputing.ipc.ReactorEventType
 import mu.KLogging
 import java.lang.reflect.Field
+import java.util.concurrent.CountDownLatch
 
 object ParentApplication : KLogging() {
 
@@ -14,19 +16,30 @@ object ParentApplication : KLogging() {
     val port = 33000
 
     val reactor = Reactor()
-    val acceptor = Acceptor(port, reactor)
+    val doneLatch = CountDownLatch(1)
+
+    val acceptor = Acceptor(port, reactor) {
+      logger.info { "Parent accepted message $it" }
+      if (it.type == MessageType.DONE) {
+        doneLatch.countDown()
+      }
+    }
     acceptor.setup()
     reactor.registerHandler(ReactorEventType.ACCEPT, acceptor)
-    spawnChilds(N, port)
+    val children = spawnChilds(N, port)
 
-    while (true) {
+    while (doneLatch.count > 0) {
       reactor.eventLoop(1000)
-      logger.warn { "reactor loop in parent" }
     }
+    reactor.eventLoop(1000)
+
+    logger.warn { "Everyone reported to be finished; awaiting for PIDs to stop" }
+    children.forEach { it.waitFor() }
+    logger.warn { "Done" }
   }
 
-  private fun spawnChilds(N: Int, port: Int) {
-    (1..N).forEach {
+  private fun spawnChilds(N: Int, port: Int): List<Process> {
+    return (1..N).map {
       val cp = System.getProperty("java.class.path")
       val pb = ProcessBuilder(
           "java",
@@ -40,6 +53,7 @@ object ParentApplication : KLogging() {
           .inheritIO()
       val process = pb.start()
       logger.warn { "Started child process ${process.getPid()}" }
+      process
     }
   }
 

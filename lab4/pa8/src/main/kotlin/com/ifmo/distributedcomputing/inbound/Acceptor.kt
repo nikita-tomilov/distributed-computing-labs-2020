@@ -17,7 +17,8 @@ import java.nio.channels.SocketChannel
 
 class Acceptor(
   private val port: Int,
-  private val reactor: Reactor
+  private val reactor: Reactor,
+  private val onMessageReceived: (Message) -> Unit = {}
 ) : EventHandler {
 
   private lateinit var serverSocket: ServerSocketChannel
@@ -33,7 +34,7 @@ class Acceptor(
 
   override fun handle(selectionKey: SelectionKey) {
     val clientSocket = serverSocket.accept()
-    logger.warn { "Accepted client connection from ${clientSocket.remoteAddress}" }
+    logger.info { "Accepted client connection from ${clientSocket.remoteAddress}" }
 
     clientSocket.configureBlocking(false);
     clientSocket.register(SelectorSingleton.selector, SelectionKey.OP_READ)
@@ -47,7 +48,8 @@ class Acceptor(
         if (bytes[0].toInt() != 0) {
           val json = String(bytes)
           val msg = mapper.readValue<Message>(json)
-          logger.warn { "Received: $msg" }
+          logger.info { "Received: $msg" }
+          onMessageReceived.invoke(msg)
         }
       }
     })

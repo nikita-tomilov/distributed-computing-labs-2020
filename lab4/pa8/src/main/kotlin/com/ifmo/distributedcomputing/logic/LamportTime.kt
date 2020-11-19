@@ -1,28 +1,28 @@
 package com.ifmo.distributedcomputing.logic
 
-import java.util.concurrent.atomic.AtomicLong
-
 class LamportTime {
 
-  private val time = AtomicLong(0L)
+  private var time = 0L
 
-  fun get() = time.get()
+  @Synchronized
+  fun get() = time
 
-  private fun set(time: Long) {
-    this.time.set(time)
-  }
-
+  @Synchronized
   fun update(another: Long): Long {
-    val current = get()
+    val current = time
     if (current > another) {
-      set(another)
+      time = another
     }
-    return get()
+    return time
   }
 
+  @Synchronized
   fun updateAndIncrement(another: Long): Long {
-    update(another)
-    time.incrementAndGet()
-    return get()
+    val current = time
+    if (current > another) {
+      time = another
+    }
+    time++
+    return time
   }
 }

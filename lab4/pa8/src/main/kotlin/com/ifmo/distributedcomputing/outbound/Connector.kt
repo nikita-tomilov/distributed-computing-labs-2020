@@ -46,7 +46,7 @@ class Connector(
       throw e
     }
 
-    logger.warn { "Connected to $targetHost:$targetPort" }
+    logger.info { "Connected to $targetHost:$targetPort" }
   }
 
   override fun handle(selectionKey: SelectionKey) {
