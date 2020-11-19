@@ -8,6 +8,7 @@ import com.ifmo.distributedcomputing.ipc.SelectorSingleton
 import mu.KLogging
 import java.net.ConnectException
 import java.net.InetSocketAddress
+import java.net.StandardSocketOptions
 import java.nio.ByteBuffer
 import java.nio.channels.SelectionKey
 import java.nio.channels.SocketChannel
@@ -33,6 +34,7 @@ class Connector(
     if (wasConnected.get()) return
     try {
       clientSocket = SocketChannel.open()
+      clientSocket.setOption(StandardSocketOptions.SO_REUSEADDR, true)
       if (localPort != 0) {
         clientSocket.bind(InetSocketAddress(localPort))
       }
@@ -40,7 +42,7 @@ class Connector(
       wasConnected.set(true)
       clientSocket.configureBlocking(false)
       clientSocket.register(SelectorSingleton.selector, SelectionKey.OP_WRITE)
-    } catch (e: ConnectException) {
+    } catch (e: Exception) {
       //do nothing
       clientSocket.close()
       throw e

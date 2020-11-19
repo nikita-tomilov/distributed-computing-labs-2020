@@ -32,12 +32,19 @@ object ChildrenApplication : KLogging() {
     logger.warn { "Connected to everyone" }
 
     cm.broadcastStarted()
+    logger.warn { "Completed Started broadcast" }
     cm.awaitEveryoneStarted()
+    logger.warn { "Other nodes Started" }
 
     cm.broadcastDone()
+    logger.warn { "Completed Done broadcast" }
     cm.awaitEveryoneDone()
+    logger.warn { "Other nodes Done" }
 
-    logger.warn { "Completed" }
     reactor.eventLoop(1000)
+    logger.warn { "Completed" }
+    acceptor.close()
+    cm.close()
+    reactor.closeAll()
   }
 }

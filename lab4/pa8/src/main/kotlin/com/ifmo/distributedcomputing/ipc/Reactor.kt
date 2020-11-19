@@ -2,6 +2,8 @@ package com.ifmo.distributedcomputing.ipc
 
 import mu.KLogging
 import java.nio.channels.SelectionKey
+import java.nio.channels.ServerSocketChannel
+import java.nio.channels.SocketChannel
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
 
@@ -34,6 +36,17 @@ class Reactor {
           }
         }
       }
+    }
+  }
+
+  fun closeAll() {
+    SelectorSingleton.selector.keys().forEach {
+      val c = it.channel()
+      when (c) {
+        is SocketChannel -> c.close()
+        is ServerSocketChannel -> c.close()
+      }
+      c.close()
     }
   }
 

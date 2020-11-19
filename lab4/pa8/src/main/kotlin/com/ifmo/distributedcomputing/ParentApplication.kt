@@ -13,7 +13,7 @@ object ParentApplication : KLogging() {
   fun parent(N: Int) {
     Thread.currentThread().name = "parent"
     logger.info { "Entered Parent" }
-    val port = 33000
+    val port = 15000
 
     val reactor = Reactor()
     val doneLatch = CountDownLatch(1)
@@ -36,6 +36,8 @@ object ParentApplication : KLogging() {
     logger.warn { "Everyone reported to be finished; awaiting for PIDs to stop" }
     children.forEach { it.waitFor() }
     logger.warn { "Done" }
+    acceptor.close()
+    reactor.closeAll()
   }
 
   private fun spawnChilds(N: Int, port: Int): List<Process> {

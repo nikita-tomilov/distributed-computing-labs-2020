@@ -10,6 +10,7 @@ import com.ifmo.distributedcomputing.ipc.ReactorEventType
 import com.ifmo.distributedcomputing.ipc.SelectorSingleton
 import mu.KLogging
 import java.net.InetSocketAddress
+import java.net.StandardSocketOptions
 import java.nio.ByteBuffer
 import java.nio.channels.SelectionKey
 import java.nio.channels.ServerSocketChannel
@@ -27,9 +28,11 @@ class Acceptor(
 
   fun setup() {
     serverSocket = ServerSocketChannel.open()
+    serverSocket.setOption(StandardSocketOptions.SO_REUSEADDR, true)
     serverSocket.bind(InetSocketAddress(port))
     serverSocket.configureBlocking(false)
     serverSocket.register(SelectorSingleton.selector, SelectionKey.OP_ACCEPT)
+    logger.info { "Acceptor opened at $port" }
   }
 
   override fun handle(selectionKey: SelectionKey) {
@@ -53,6 +56,10 @@ class Acceptor(
         }
       }
     })
+  }
+
+  fun close() {
+    serverSocket.close()
   }
 
   companion object : KLogging()
