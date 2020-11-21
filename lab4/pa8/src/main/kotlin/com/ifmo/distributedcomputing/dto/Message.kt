@@ -5,7 +5,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 data class Message(
   val from: Int,
   val to: Int,
-  val type: MessageType
+  val type: MessageType,
+  var time: Long = -1L
 ) {
   @JsonIgnore
   fun isBroadcast(): Boolean = (to == -1)

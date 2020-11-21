@@ -2,17 +2,14 @@ package com.ifmo.distributedcomputing.logic
 
 class LamportTime {
 
-  private var time = 0L
+  private var time = 1L
 
   @Synchronized
   fun get() = time
 
   @Synchronized
-  fun update(another: Long): Long {
-    val current = time
-    if (current > another) {
-      time = another
-    }
+  fun incrementAndGet(): Long {
+    time += 1
     return time
   }
 
@@ -22,7 +19,7 @@ class LamportTime {
     if (current > another) {
       time = another
     }
-    time++
+    time += 1
     return time
   }
 }

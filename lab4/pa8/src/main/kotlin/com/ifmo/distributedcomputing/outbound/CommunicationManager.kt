@@ -4,9 +4,9 @@ import com.ifmo.distributedcomputing.dto.Message
 import com.ifmo.distributedcomputing.dto.MessageType
 import com.ifmo.distributedcomputing.ipc.Reactor
 import com.ifmo.distributedcomputing.ipc.ReactorEventType
+import com.ifmo.distributedcomputing.logic.LamportTime
 import mu.KLogging
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.CountDownLatch
 
 class CommunicationManager(
@@ -15,24 +15,21 @@ class CommunicationManager(
   private val myId: Int,
   private val reactor: Reactor,
   private val startedLatch: CountDownLatch,
-  private val doneLatch: CountDownLatch
+  private val doneLatch: CountDownLatch,
+  private val time: LamportTime
 ) {
 
   private val connectors = ConcurrentHashMap<Int, Connector>()
 
-  private val startedKek = CopyOnWriteArraySet<Int>()
+  var csMessageHandler: (Message) -> Unit = {}
 
   fun onMessageReceived(message: Message) {
     logger.info { "Received $message" }
+    time.updateAndIncrement(message.time)
     when (message.type) {
-      MessageType.STARTED -> {
-        startedLatch.countDown()
-        startedKek.add(message.from)
-      }
+      MessageType.STARTED -> startedLatch.countDown()
       MessageType.DONE -> doneLatch.countDown()
-      else -> {
-        logger.warn { "unable to handle msg $message" }
-      }
+      else -> csMessageHandler.invoke(message)
     }
   }
 
@@ -41,11 +38,11 @@ class CommunicationManager(
       if (it == myId) return@forEach
       val targetProcess = it
       val targetPort = parentPort + it
-      var localPort = parentPort * 2 + myId
+      val localPort = parentPort * 2 + myId //TODO: if bind failed, try increase local port?
 
       var success = false
       while (!success) {
-        try { //TODO: timeouts here, seems that it doesnt work on 50+ processes
+        try {
           logger.info { "Trying to connect to localhost:${targetPort} from local port $localPort" }
           val connector = Connector(
               "localhost",
@@ -57,7 +54,7 @@ class CommunicationManager(
           success = true
           connectors[it] = connector
         } catch (e: Exception) {
-          logger.warn { "Error сonnecting to $targetPort from $localPort: $e" }
+          logger.warn { "Error connecting to $targetPort from $localPort: $e" }
           reactor.eventLoop(1000)
         }
       }
@@ -85,12 +82,14 @@ class CommunicationManager(
   }
 
   fun send(message: Message) {
+    message.time = time.incrementAndGet()
     connectors[message.to]?.send(message) ?: error("no connector for ${message.to}")
   }
 
   fun broadcast(message: Message) {
-    connectors.forEach { (_, connector) ->
-      reactor.eventLoop(100)
+    message.time = time.incrementAndGet()
+    (0..totalProcesses).forEach {
+      val connector = connectors[it] ?: return@forEach
       connector.send(message)
     }
   }

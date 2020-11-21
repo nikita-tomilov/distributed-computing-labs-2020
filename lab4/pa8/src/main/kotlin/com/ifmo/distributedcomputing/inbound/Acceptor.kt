@@ -51,7 +51,6 @@ class Acceptor(
         if (bytes[0].toInt() != 0) {
           val json = String(bytes)
           val msg = mapper.readValue<Message>(json)
-          logger.info { "Received: $msg" }
           onMessageReceived.invoke(msg)
         }
       }

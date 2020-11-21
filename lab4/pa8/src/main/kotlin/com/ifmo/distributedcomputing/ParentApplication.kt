@@ -16,7 +16,7 @@ object ParentApplication : KLogging() {
     val port = 15000
 
     val reactor = Reactor()
-    val doneLatch = CountDownLatch(1)
+    val doneLatch = CountDownLatch(N)
 
     val acceptor = Acceptor(port, reactor) {
       logger.info { "Parent accepted message $it" }

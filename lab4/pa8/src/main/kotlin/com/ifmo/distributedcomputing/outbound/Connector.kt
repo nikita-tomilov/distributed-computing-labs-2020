@@ -63,12 +63,14 @@ class Connector(
       val sc = clientSocket.socket().channel
       val bb: ByteBuffer = ByteBuffer.wrap(json.toByteArray())
       sc.write(bb)
+      logger.info { "Sent $m to $targetProcessId" }
     }
   }
 
   fun send(m: Message) {
-    if ((m.to == targetProcessId) || (m.isBroadcast()))
-    writeQueue.add(m)
+    if ((m.to == targetProcessId) || (m.isBroadcast())) {
+      writeQueue.add(m)
+    }
   }
 
   fun close() {
