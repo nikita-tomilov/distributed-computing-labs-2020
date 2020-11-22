@@ -9,10 +9,11 @@ object Application : KLogging() {
     if (args.isEmpty()) {
       logger.error { "Please specify N" }
     }
+    val usingMutex = args.last() == "--mutexl"
     if (args[0] != "--forked") {
-      ParentApplication.parent(args[0].toInt())
+      ParentApplication.parent(args[0].toInt(), usingMutex)
     } else {
-      ChildrenApplication.child(args[1].toInt(), args[2].toInt(), args[3].toInt())
+      ChildrenApplication.child(args[1].toInt(), args[2].toInt(), args[3].toInt(), usingMutex)
     }
   }
 }

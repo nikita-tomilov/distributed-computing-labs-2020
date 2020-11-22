@@ -10,9 +10,9 @@ import java.util.concurrent.CountDownLatch
 
 object ParentApplication : KLogging() {
 
-  fun parent(N: Int) {
+  fun parent(N: Int, usingMutex: Boolean) {
     Thread.currentThread().name = "parent"
-    logger.info { "Entered Parent" }
+    logger.warn { "Entered Parent; usingMutex: $usingMutex" }
     val port = 15000
 
     val reactor = Reactor()
@@ -26,7 +26,7 @@ object ParentApplication : KLogging() {
     }
     acceptor.setup()
     reactor.registerHandler(ReactorEventType.ACCEPT, acceptor)
-    val children = spawnChilds(N, port)
+    val children = spawnChilds(N, port, usingMutex)
 
     while (doneLatch.count > 0) {
       reactor.eventLoop(1000)
@@ -40,7 +40,9 @@ object ParentApplication : KLogging() {
     reactor.closeAll()
   }
 
-  private fun spawnChilds(N: Int, port: Int): List<Process> {
+  @Suppress("SameParameterValue")
+  private fun spawnChilds(N: Int, port: Int, usingMutex: Boolean): List<Process> {
+    val mutexParam = if (usingMutex) "--mutexl" else "--no-mutex"
     return (1..N).map {
       val cp = System.getProperty("java.class.path")
       val pb = ProcessBuilder(
@@ -51,7 +53,8 @@ object ParentApplication : KLogging() {
           "--forked",
           "$port",
           "$it",
-          "$N")
+          "$N",
+          mutexParam)
           .inheritIO()
       val process = pb.start()
       logger.warn { "Started child process ${process.getPid()}" }

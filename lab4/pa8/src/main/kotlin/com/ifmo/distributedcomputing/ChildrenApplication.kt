@@ -11,7 +11,7 @@ import java.util.concurrent.CountDownLatch
 
 object ChildrenApplication : KLogging() {
 
-  fun child(parentPort: Int, myId: Int, totalProcesses: Int) {
+  fun child(parentPort: Int, myId: Int, totalProcesses: Int, usingMutex: Boolean) {
     Thread.currentThread().name = "child-$myId"
 
     val startedLatch = CountDownLatch(totalProcesses)
@@ -43,9 +43,9 @@ object ChildrenApplication : KLogging() {
 
     val total = myId * 5
     (1..total).forEach {
-      mutex.requestCS()
+      if (usingMutex) mutex.requestCS()
       logger.warn { "Process $myId doing iteration $it out of $total" }
-      mutex.releaseCS()
+      if (usingMutex) mutex.releaseCS()
     }
 
     cm.broadcastDone()
