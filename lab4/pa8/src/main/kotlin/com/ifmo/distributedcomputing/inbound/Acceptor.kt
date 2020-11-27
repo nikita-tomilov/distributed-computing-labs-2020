@@ -2,7 +2,6 @@ package com.ifmo.distributedcomputing.inbound
 
 import com.fasterxml.jackson.core.JsonFactory
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import com.fasterxml.jackson.module.kotlin.readValues
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.ifmo.distributedcomputing.dto.Message
@@ -47,6 +46,7 @@ class Acceptor(
     reactor.registerHandler(ReactorEventType.READ, object : EventHandler {
       override fun handle(selectionKey: SelectionKey) {
         val socketChannel = selectionKey.channel() as SocketChannel
+        if (socketChannel != clientSocket) return //surprisingly enough, if i get called to read from another socket channel, i fail
         val bb: ByteBuffer = ByteBuffer.allocate(1024)
         val count = socketChannel.read(bb)
         val bytes = bb.array()
@@ -54,7 +54,8 @@ class Acceptor(
           val jsonsString = String(bytes).substring(0 until count)
           val f = JsonFactory()
           val jsons = mapper.readValues<Message>(f.createParser(jsonsString))
-          jsons.forEach { msg ->
+          val messages = jsons.iterator().asSequence().toList()
+          messages.sortedBy { it.time }.forEach { msg ->
             onMessageReceived.invoke(msg)
           }
         }

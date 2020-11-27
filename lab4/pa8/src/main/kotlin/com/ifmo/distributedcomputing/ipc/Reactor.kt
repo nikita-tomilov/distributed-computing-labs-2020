@@ -1,15 +1,18 @@
 package com.ifmo.distributedcomputing.ipc
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
 import mu.KLogging
 import java.nio.channels.SelectionKey
 import java.nio.channels.ServerSocketChannel
 import java.nio.channels.SocketChannel
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.*
+import kotlin.system.exitProcess
 
 class Reactor {
 
   private val handlers = ConcurrentHashMap<ReactorEventType, CopyOnWriteArraySet<EventHandler>>()
+
+  private val tp = Executors.newFixedThreadPool(4, ThreadFactoryBuilder().setDaemon(true).build())
 
   fun registerHandler(type: ReactorEventType, handler: EventHandler) {
     handlers.getOrPut(type) { CopyOnWriteArraySet() }.add(handler)
@@ -22,19 +25,37 @@ class Reactor {
         continue
       }
       val selectedKeys = SelectorSingleton.selector.selectedKeys().iterator()
+      val queue = ArrayList<Runnable>()
+      var latch = CountDownLatch(0)
       while (selectedKeys.hasNext()) {
         val selectedKey = selectedKeys.pop()
         when {
           selectedKey.isAcceptable -> handlers[ReactorEventType.ACCEPT]?.forEach {
-            it.handle(
-                selectedKey)
+            queue.add(Runnable {
+              it.handle(selectedKey)
+              latch.countDown()
+            })
           }
-          selectedKey.isReadable -> handlers[ReactorEventType.READ]?.forEach { it.handle(selectedKey) }
+          selectedKey.isReadable -> handlers[ReactorEventType.READ]?.forEach {
+            queue.add(Runnable {
+              it.handle(selectedKey)
+              latch.countDown()
+            })
+          }
           selectedKey.isWritable -> handlers[ReactorEventType.WRITE]?.forEach {
-            it.handle(
-                selectedKey)
+            queue.add(Runnable {
+              it.handle(selectedKey)
+              latch.countDown()
+            })
           }
         }
+      }
+      latch = CountDownLatch(queue.size)
+      queue.forEach { tp.submit(it) }
+      val ok = latch.await(10, TimeUnit.MINUTES)
+      if (!ok) {
+        logger.error { "latch await FAILED on latch size ${queue.size}" }
+        exitProcess(-1)
       }
     }
   }

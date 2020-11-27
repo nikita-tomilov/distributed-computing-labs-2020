@@ -34,7 +34,10 @@ object ParentApplication : KLogging() {
     reactor.eventLoop(1000)
 
     logger.warn { "Everyone reported to be finished; awaiting for PIDs to stop" }
-    children.forEach { it.waitFor() }
+    children.forEach {
+      logger.warn { "Awaiting for PID ${it.getPid()}" }
+      it.waitFor()
+    }
     logger.warn { "Done" }
     acceptor.close()
     reactor.closeAll()

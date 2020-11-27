@@ -8,6 +8,7 @@ import com.ifmo.distributedcomputing.logic.LamportTime
 import mu.KLogging
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
 
 class CommunicationManager(
   private val totalProcesses: Int,
@@ -23,13 +24,15 @@ class CommunicationManager(
 
   var csMessageHandler: (Message) -> Unit = {}
 
+  private val iAmDone = AtomicBoolean(false)
+
   fun onMessageReceived(message: Message) {
     logger.info { "Received $message" }
     time.updateAndIncrement(message.time)
     when (message.type) {
       MessageType.STARTED -> startedLatch.countDown()
       MessageType.DONE -> doneLatch.countDown()
-      else -> csMessageHandler.invoke(message)
+      else -> if (!iAmDone.get()) { csMessageHandler.invoke(message) }
     }
   }
 
@@ -73,6 +76,7 @@ class CommunicationManager(
 
   fun broadcastDone() {
     broadcast(Message(myId, -1, MessageType.DONE))
+    iAmDone.set(true)
   }
 
   fun awaitEveryoneDone() {
