@@ -57,7 +57,7 @@ class Connector(
     if (channel != my) {
       return
     }
-    if (writeQueue.isNotEmpty()) {
+    while (writeQueue.isNotEmpty()) {
       val m = writeQueue.poll()
       val json = mapper.writeValueAsString(m)
       val sc = clientSocket.socket().channel

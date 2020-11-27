@@ -17,12 +17,11 @@ class LamportMutex(
   private val time: LamportTime
 ) {
 
-  //TODO: HANDLE FUCKING TIME, IT GOES TO CYCLE
-  // [LamportMutexQueueEntry(time=0, id=2), LamportMutexQueueEntry(time=0, id=1)]
-
   private val queue = AtomicReference<List<LamportMutexQueueEntry>>(emptyList())
 
   private val acknowledgements = AtomicLong(1)
+
+  private val waitCounter = AtomicLong(0)
 
   init {
     communicationManager.csMessageHandler = {
@@ -57,14 +56,24 @@ class LamportMutex(
     while (acknowledgements.get() < totalProcesses.count) {
       reactor.eventLoop(100)
       logger.info { "waitin for replies, got ${acknowledgements.get()} out of ${totalProcesses.count}" }
+      waitCounter.incrementAndGet()
+      if (waitCounter.get() % 100L == 0L) {
+        logger.warn { "STUCK in waiting for replies, got ${acknowledgements.get()} out of ${totalProcesses.count}" }
+      }
     }
+    waitCounter.set(0)
   }
 
   private fun waitForQueue() {
     while (queue.get()[0].id != myId) {
       reactor.eventLoop(100)
       logger.info { "waitin for queue, it is ${queue.get()}" }
+      waitCounter.incrementAndGet()
+      if (waitCounter.get() % 100L == 0L) {
+        logger.warn { "STUCK in waiting for queue, it is ${queue.get()}" }
+      }
     }
+    waitCounter.set(0)
   }
 
   private fun sendCSRelease() {
