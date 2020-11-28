@@ -6,7 +6,6 @@ import com.ifmo.distributedcomputing.dto.Message
 import com.ifmo.distributedcomputing.ipc.EventHandler
 import com.ifmo.distributedcomputing.ipc.SelectorSingleton
 import mu.KLogging
-import java.net.ConnectException
 import java.net.InetSocketAddress
 import java.net.StandardSocketOptions
 import java.nio.ByteBuffer
@@ -52,18 +51,26 @@ class Connector(
   }
 
   override fun handle(selectionKey: SelectionKey) {
-    val channel = selectionKey.channel() as SocketChannel
-    val my = clientSocket.socket().channel
-    if (channel != my) {
-      return
-    }
-    while (writeQueue.isNotEmpty()) {
-      val m = writeQueue.poll()
-      val json = mapper.writeValueAsString(m)
-      val sc = clientSocket.socket().channel
-      val bb: ByteBuffer = ByteBuffer.wrap(json.toByteArray())
-      sc.write(bb)
-      logger.info { "Sent $m to $targetProcessId" }
+    synchronized(selectionKey) {
+      val channel = selectionKey.channel() as SocketChannel
+      val my = clientSocket.socket().channel
+      if (channel != my) {
+        return
+      }
+      if (writeQueue.isNotEmpty()) {
+        val s = StringBuffer()
+        val queueCopy = ArrayList<Message>()
+        while (writeQueue.isNotEmpty()) {
+          queueCopy.add(writeQueue.poll())
+        }
+        queueCopy.sortedBy { it.time }.forEach { m ->
+          val json = mapper.writeValueAsString(m)
+          logger.info { "Sent $m to $targetProcessId" }
+          s.append(json)
+        }
+        val sc = clientSocket.socket().channel
+        sc.write(ByteBuffer.wrap(s.toString().toByteArray()))
+      }
     }
   }
 

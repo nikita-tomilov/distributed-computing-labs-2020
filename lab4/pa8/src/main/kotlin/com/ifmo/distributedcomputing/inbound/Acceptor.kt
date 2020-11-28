@@ -37,30 +37,52 @@ class Acceptor(
   }
 
   override fun handle(selectionKey: SelectionKey) {
-    val clientSocket = serverSocket.accept()
-    logger.info { "Accepted client connection from ${clientSocket.remoteAddress}" }
+    synchronized(selectionKey) {
+      val clientSocket = serverSocket.accept()
+      logger.info { "Accepted client connection from ${clientSocket.remoteAddress}" }
 
-    clientSocket.configureBlocking(false);
-    clientSocket.register(SelectorSingleton.selector, SelectionKey.OP_READ)
+      clientSocket.configureBlocking(false);
+      clientSocket.register(SelectorSingleton.selector, SelectionKey.OP_READ)
 
-    reactor.registerHandler(ReactorEventType.READ, object : EventHandler {
-      override fun handle(selectionKey: SelectionKey) {
-        val socketChannel = selectionKey.channel() as SocketChannel
-        if (socketChannel != clientSocket) return //surprisingly enough, if i get called to read from another socket channel, i fail
-        val bb: ByteBuffer = ByteBuffer.allocate(1024)
-        val count = socketChannel.read(bb)
-        val bytes = bb.array()
-        if (bytes[0].toInt() != 0) {
-          val jsonsString = String(bytes).substring(0 until count)
-          val f = JsonFactory()
-          val jsons = mapper.readValues<Message>(f.createParser(jsonsString))
-          val messages = jsons.iterator().asSequence().toList()
-          messages.sortedBy { it.time }.forEach { msg ->
-            onMessageReceived.invoke(msg)
+      reactor.registerHandler(ReactorEventType.READ, object : EventHandler {
+        override fun handle(selectionKey: SelectionKey) {
+          synchronized(selectionKey) {
+            val socketChannel = selectionKey.channel() as SocketChannel
+            if (socketChannel != clientSocket) return //surprisingly enough, if i get called to read from another socket channel, i fail
+
+            val bb = ByteBuffer.allocate(2048)
+            val count = socketChannel.read(bb)
+            val bytes = bb.array()
+
+            if ((count == 0) || (bytes[0].toInt() == 0)) return
+
+            var jsonsString = String(bytes).substring(0 until count)
+            val openingBracesCount = jsonsString.count { c -> c == '{' }
+            val closingBracesCount = jsonsString.count { c -> c == '}' }
+            if (openingBracesCount != closingBracesCount) {
+              logger.warn { "Mismatch on braces on received string '$jsonsString'" }
+              var lastChar = jsonsString.last()
+              while (lastChar != '}') {
+                val b1 = ByteBuffer.allocate(1)
+                val count1 = socketChannel.read(b1)
+                if (count1 != 1) continue
+                if (b1[0].toInt() == 0) continue
+                lastChar = b1.char
+                jsonsString += lastChar
+              }
+            }
+
+            val f = JsonFactory()
+            val jsons = mapper.readValues<Message>(f.createParser(jsonsString))
+            val messages = jsons.iterator().asSequence().toList()
+
+            messages.sortedBy { it.time }.forEach { msg ->
+              onMessageReceived.invoke(msg)
+            }
           }
         }
-      }
-    })
+      })
+    }
   }
 
   fun close() {
