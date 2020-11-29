@@ -4,10 +4,11 @@ import com.ifmo.distributedcomputing.dto.Message
 import com.ifmo.distributedcomputing.dto.MessageType
 import com.ifmo.distributedcomputing.ipc.Reactor
 import com.ifmo.distributedcomputing.outbound.CommunicationManager
+import com.sun.jmx.remote.internal.ArrayQueue
 import mu.KLogging
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
 
 class LamportMutex(
   private val communicationManager: CommunicationManager,
@@ -17,7 +18,7 @@ class LamportMutex(
   private val time: LamportTime
 ) {
 
-  private val queue = AtomicReference<List<LamportMutexQueueEntry>>(emptyList())
+  private val queue = ArrayList<LamportMutexQueueEntry>()
 
   private val acknowledgements = AtomicLong(1)
 
@@ -55,7 +56,7 @@ class LamportMutex(
   private fun waitForReplies() {
     while (acknowledgements.get() < totalProcesses.count) {
       reactor.eventLoop(100)
-      logger.info { "waitin for replies, got ${acknowledgements.get()} out of ${totalProcesses.count}" }
+      logger.info { "waiting for replies, got ${acknowledgements.get()} out of ${totalProcesses.count}" }
       waitCounter.incrementAndGet()
       if (waitCounter.get() % 100L == 0L) {
         logger.warn { "STUCK in waiting for replies, got ${acknowledgements.get()} out of ${totalProcesses.count}" }
@@ -65,12 +66,22 @@ class LamportMutex(
   }
 
   private fun waitForQueue() {
-    while (queue.get()[0].id != myId) {
+    var condition: Boolean
+    synchronized(queue) {
+      condition = queue[0].id != myId
+    }
+    while (condition) {
       reactor.eventLoop(100)
-      logger.info { "waitin for queue, it is ${queue.get()}" }
+      logger.info { "waiting for queue, it is $queue" }
       waitCounter.incrementAndGet()
       if (waitCounter.get() % 100L == 0L) {
-        logger.warn { "STUCK in waiting for queue, it is ${queue.get()}" }
+        logger.warn { "STUCK in waiting for queue, it is $queue" }
+        synchronized(queue) {
+          queueSanityCheck()
+        }
+      }
+      synchronized(queue) {
+        condition = queue[0].id != myId
       }
     }
     waitCounter.set(0)
@@ -98,24 +109,42 @@ class LamportMutex(
   }
 
   private fun sortQueue() {
-    val sorted = queue.get().sortedWith(compareBy({ it.time }, { it.id }))
-    queue.set(sorted)
+    queue.sortWith(compareBy({ it.time }, { it.id }))
   }
 
   private fun addToQueue(entry: LamportMutexQueueEntry) {
-    val appended = queue.get() + entry
-    queue.set(appended)
-    sortQueue()
+    synchronized(queue) {
+      queue.add(entry)
+      sortQueue()
+      queueSanityCheck()
+    }
   }
 
   private fun deleteFromQueue(id: Int) {
-    val updated = queue.get().filter { it.id != id }
-    queue.set(updated)
-    sortQueue()
+    synchronized(queue) {
+      queue.removeIf { it.id == id }
+      sortQueue()
+    }
+  }
+
+  private fun queueSanityCheck() {
+    val ids = HashSet<Int>()
+    val duplicates = HashSet<Int>()
+    queue.forEach {
+      if (ids.contains(it.id)) {
+        logger.warn("Found duplicate queue entry for child id ${it.id}: $it")
+        duplicates.add(it.id)
+      } else ids.add(it.id)
+    }
+    duplicates.forEach { id ->
+      val lastEntry = queue.lastOrNull { it.id == id }
+      if (lastEntry != null) {
+        queue.removeIf { (it != lastEntry) && (it.id == id) }
+      }
+    }
   }
 
   companion object : KLogging()
-
 }
 
 data class LamportMutexQueueEntry(
